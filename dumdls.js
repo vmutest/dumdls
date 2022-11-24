@@ -10,16 +10,17 @@ window.addEventListener('load', async function () {
     const text = await fetch(LINK_DATA).then((response) => response.text());
 
     // list questions
-    const listQuestion = text
+    let listQuestion = text
         .split(/\n\s*\n/) // split the text by empty lines
         .map((group) =>
             group.split('\n').map((line) => line.replace(/\r/g, ''))
         ) // split the text by new lines
-        .map((group) => ({
+        .map((group, index) => ({
             question: group[0], // first line is the question
             listAnswered: group.slice(1), // other lines are the answers
             answered: null, // answered by the user
             result: NONE_ANSWER, // result of the question
+            index,
         })); // create an object for each question
 
     // Get some elements from the DOM
@@ -37,18 +38,20 @@ window.addEventListener('load', async function () {
     const btnResetWrongEl = document.getElementById('btn-reset-wrong');
 
     function resetWrong() {
-        const index = listQuestion.findIndex(
-            (question) => question.result !== RIGHT_ANSWER
-        );
-        if (index !== -1) {
-            listQuestion.forEach((question) => {
-                if (question.result !== RIGHT_ANSWER) {
-                    question.result = NONE_ANSWER;
-                    question.answered = null;
-                }
-            });
-            showQuestion(index);
-        }
+        listQuestion = listQuestion.filter((question) => {
+            if (question.result !== RIGHT_ANSWER) {
+                question.result = NONE_ANSWER;
+                question.answered = null;
+                return true;
+            } else {
+                const gridQuestionEl = document.getElementById(
+                    `grid-question-item-${question.index}`
+                );
+                gridQuestionContainerEl.removeChild(gridQuestionEl);
+                return false;
+            }
+        });
+        showQuestion(listQuestion[0].index);
     }
 
     btnResetWrongEl.addEventListener('click', () => {
@@ -67,27 +70,28 @@ window.addEventListener('load', async function () {
     };
 
     // Create a grid of questions
-    listQuestion.forEach((question, index) => {
+    listQuestion.forEach(({ index }) => {
         const gridQuestionEl = document.createElement('div');
         gridQuestionEl.classList.add('grid-question-item');
         gridQuestionEl.id = `grid-question-item-${index}`;
         gridQuestionEl.innerText = index + 1;
         gridQuestionEl.addEventListener('click', () => {
             showQuestion(index);
+            tabNavEls[0].click(); // show the first tab
         });
         gridQuestionContainerEl.appendChild(gridQuestionEl);
     });
 
     function updateGridQuestion() {
-        listQuestion.forEach((question, index) => {
+        listQuestion.forEach((question) => {
             const gridQuestionEl = document.getElementById(
-                `grid-question-item-${index}`
+                `grid-question-item-${question.index}`
             );
             gridQuestionEl.classList.remove('active');
             gridQuestionEl.classList.remove('right');
             gridQuestionEl.classList.remove('wrong');
             gridQuestionEl.classList.add(question.result);
-            if (index === currentQuestionIndex) {
+            if (question.index === currentQuestionIndex) {
                 gridQuestionEl.classList.add('active');
             }
         });
@@ -186,23 +190,11 @@ window.addEventListener('load', async function () {
         ).length;
 
         // calculate the score
-        const score = Math.round((countCorrect / listQuestion.length) * 100);
-
-        // list rank
-        const listRank = [
-            { minScore: 90, rank: 'A+' },
-            { minScore: 85, rank: 'A' },
-            { minScore: 80, rank: 'B+' },
-            { minScore: 75, rank: 'B' },
-            { minScore: 70, rank: 'C+' },
-            { minScore: 65, rank: 'C' },
-            { minScore: 60, rank: 'D+' },
-            { minScore: 55, rank: 'D' },
-            { minScore: 0, rank: 'F' },
-        ];
-
-        // find the rank
-        const rank = listRank.find((item) => score >= item.minScore).rank;
+        const score =
+            Math.round(
+                ((countCorrect / listQuestion.length) * 10 + Number.EPSILON) *
+                    10
+            ) / 10;
 
         // const questionContainer = document.getElementById('question-container');
         // questionContainer.innerHTML = ''; // clear the question container
@@ -216,7 +208,7 @@ window.addEventListener('load', async function () {
         // create result element
         const result = document.createElement('div');
         result.classList.add('result');
-        result.innerHTML = `<span class="message">${rank}</span>${countCorrect}/${listQuestion.length}`;
+        result.innerText = score;
         resultContainer.appendChild(result);
 
         // create btn reset wrong element
